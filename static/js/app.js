@@ -4,9 +4,10 @@
 ═══════════════════════════════════════════ */
 
 // ✅ UPDATED ONLY THIS LINE
-const API = window.location.hostname.includes('localhost')
-  ? '/api/'
-  : 'https://your-backend.onrender.com/api/'; // 🔥 replace with your real backend URL
+// const API = window.location.hostname.includes('localhost')
+//   ? '/api/'
+//   : 'https://your-backend.onrender.com/api/'; // 🔥 replace with your real backend URL
+const API = 'https://dh-platform.onrender.com/api/';
 
 
 /* ── Token helpers ─────────────────────────── */
