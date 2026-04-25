@@ -1,11 +1,28 @@
+import os
 from pathlib import Path
 from datetime import timedelta
-from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config('SECRET_KEY', default='dh-secret-key-change-in-production-2026')
-DEBUG      = config('DEBUG', default=True, cast=bool)
+# .env file read karo
+_env_path = BASE_DIR / '.env'
+if _env_path.exists():
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith('#') and '=' in _line:
+                _k, _v = _line.split('=', 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
+def env(key, default=None):
+    return os.environ.get(key, default)
+
+def env_bool(key, default=True):
+    return os.environ.get(key, str(default)).lower() in ('true', '1', 'yes')
+
+# ── Core ──────────────────────────────────────────────────────────────────────
+SECRET_KEY    = env('SECRET_KEY', 'dh-secret-key-change-in-production-2026')
+DEBUG         = env_bool('DEBUG', True)
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
@@ -19,7 +36,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
-    # Project apps
     'authentication',
     'subscriptions',
     'scores',
@@ -59,19 +75,26 @@ TEMPLATES = [{
 
 WSGI_APPLICATION = 'dh_platform.wsgi.application'
 
+# ── Database (Supabase) ───────────────────────────────────────────────────────
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME':     config('DB_NAME'),
-        'USER':     config('DB_USER'),
-        'PASSWORD': config('DB_PASSWORD'),
-        'HOST':     config('DB_HOST'),
-        'PORT':     config('DB_PORT'),
+        'ENGINE':   'django.db.backends.postgresql',
+        'NAME':     env('DB_NAME',     'postgres'),
+        'USER':     env('DB_USER',     'postgres'),
+        'PASSWORD': env('DB_PASSWORD', 'postgres'),
+        'HOST':     env('DB_HOST',     'localhost'),
+        'PORT':     env('DB_PORT',     '5432'),
+        'OPTIONS': {
+            'sslmode': 'require',
+        },
     }
 }
 
 AUTH_USER_MODEL = 'authentication.User'
 
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -83,17 +106,17 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME':  timedelta(days=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
-    'ROTATE_REFRESH_TOKENS':  True,
+    'ACCESS_TOKEN_LIFETIME':    timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME':   timedelta(days=30),
+    'ROTATE_REFRESH_TOKENS':    True,
     'BLACKLIST_AFTER_ROTATION': True,
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
 
-STATIC_URL  = '/static/'
+STATIC_URL       = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_ROOT      = BASE_DIR / 'staticfiles'
 
 MEDIA_URL  = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -105,15 +128,13 @@ TIME_ZONE     = 'Europe/London'
 USE_I18N      = True
 USE_TZ        = True
 
-# Stripe
-STRIPE_SECRET_KEY      = config('STRIPE_SECRET_KEY',      default='sk_test_xxx')
-STRIPE_WEBHOOK_SECRET  = config('STRIPE_WEBHOOK_SECRET',  default='whsec_xxx')
+STRIPE_SECRET_KEY     = env('STRIPE_SECRET_KEY',     'sk_test_xxx')
+STRIPE_WEBHOOK_SECRET = env('STRIPE_WEBHOOK_SECRET', 'whsec_xxx')
 
-# Business rules
-MONTHLY_PRICE        = 9.99
-YEARLY_PRICE         = 89.99
-CHARITY_MIN_PERCENT  = 10
-PRIZE_POOL_PERCENT   = 40
-MAX_SCORES_PER_USER  = 5
-SCORE_MIN            = 1
-SCORE_MAX            = 45
+MONTHLY_PRICE       = 9.99
+YEARLY_PRICE        = 89.99
+CHARITY_MIN_PERCENT = 10
+PRIZE_POOL_PERCENT  = 40
+MAX_SCORES_PER_USER = 5
+SCORE_MIN           = 1
+SCORE_MAX           = 45

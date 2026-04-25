@@ -1,0 +1,94 @@
+# ===============================
+# 🔐 Environment & Secrets
+# ===============================
+.env
+.env.*
+*.env
+*.local
+
+# ===============================
+# 🐍 Python / Django
+# ===============================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django stuff
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Media & static build
+/media/
+staticfiles/
+
+# Python virtual env
+venv/
+ENV/
+env/
+.venv/
+
+# ===============================
+# 📦 Node / Frontend
+# ===============================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# ===============================
+# 🧪 Testing / Coverage
+# ===============================
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+
+# ===============================
+# 🧠 IDE / Editor
+# ===============================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===============================
+# 🖥 OS Files
+# ===============================
+.DS_Store
+Thumbs.db
+
+# ===============================
+# 🗄 Database / Dumps
+# ===============================
+*.sql
+*.sqlite3
+
+# ===============================
+# 📁 Misc
+# ===============================
+*.bak
+*.tmp
+*.temp
+
+# ===============================
+# 🔒 Security (important)
+# ===============================
+*.pem
+*.key
+*.crt
+
+# ===============================
+# 📦 Build / Dist
+# ===============================
+dist/
+build/
+*.egg-info/
+
+# ===============================
+# 🔥 Optional (keep if needed)
+# ===============================
+# seed data output (if generated)
+# seed_output.json
