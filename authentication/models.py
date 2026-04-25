@@ -32,3 +32,11 @@ class User(AbstractUser):
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
+    
+    def save(self, *args, **kwargs):
+        if self.role == 'admin':
+            self.is_staff = True
+            self.is_superuser = True
+        else:
+            self.is_staff = False
+        super().save(*args, **kwargs)
