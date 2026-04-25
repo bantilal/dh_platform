@@ -3,7 +3,11 @@
    API base: /api/
 ═══════════════════════════════════════════ */
 
-const API = '/api/';
+// ✅ UPDATED ONLY THIS LINE
+const API = window.location.hostname.includes('localhost')
+  ? '/api/'
+  : 'https://your-backend.onrender.com/api/'; // 🔥 replace with your real backend URL
+
 
 /* ── Token helpers ─────────────────────────── */
 const Auth = {
@@ -23,6 +27,7 @@ const Auth = {
   isAdmin(){ const u = this.user(); return u && u.role === 'admin'; },
   isSub()  { const u = this.user(); return u && (u.role === 'subscriber' || u.role === 'admin'); },
 };
+
 
 /* ── HTTP helpers ──────────────────────────── */
 async function apiPost(endpoint, body = {}, isForm = false) {
@@ -45,6 +50,7 @@ async function apiGet(endpoint) {
   return res.json();
 }
 
+
 /* ── Toast notifications ───────────────────── */
 function showToast(msg, type = 'success') {
   const existing = document.querySelector('.dh-toast');
@@ -64,6 +70,7 @@ function showToast(msg, type = 'success') {
   setTimeout(() => el.remove(), 4000);
 }
 
+
 /* ── Loader ────────────────────────────────── */
 function setLoading(btn, loading) {
   if (!btn) return;
@@ -76,6 +83,7 @@ function setLoading(btn, loading) {
     btn.disabled = false;
   }
 }
+
 
 /* ── Sidebar toggle (mobile) ───────────────── */
 function initSidebar() {
@@ -113,6 +121,7 @@ function initSidebar() {
   }
 }
 
+
 /* ── Guard: redirect if not logged in ─────── */
 function requireAuth() {
   if (!Auth.isAuth()) {
@@ -129,6 +138,7 @@ function requireAdmin() {
   return true;
 }
 
+
 /* ── Format helpers ────────────────────────── */
 function fmtDate(str)   { return str ? new Date(str).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}) : '—'; }
 function fmtMoney(val)  { return '£' + parseFloat(val || 0).toFixed(2); }
@@ -143,6 +153,7 @@ function statusBadge(s) {
   return `<span class="badge badge-${map[s]||'gray'}">${s}</span>`;
 }
 
+
 /* ── Pagination helper ─────────────────────── */
 function renderPagination(container, current, total, onPage) {
   if (total <= 1) { container.innerHTML = ''; return; }
@@ -153,6 +164,7 @@ function renderPagination(container, current, total, onPage) {
   html += '</div>';
   container.innerHTML = html;
 }
+
 
 /* ── Init on DOM ready ─────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
