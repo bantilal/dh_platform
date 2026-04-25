@@ -105,7 +105,7 @@
 <script>
 // Load charities into select
 async function loadCharities() {
-  const res = await apiPost('charities/charity-list/', { limit: 50 });
+  const res = await apiGet('charities/charity-list/');
   const sel = document.getElementById('charity_id');
   if (res.status && res.data.length) {
     sel.innerHTML = res.data.map(c =>
