@@ -1,0 +1,80 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Admin Dashboard – Digital Heroes{% endblock %}
+{% block page_title %}Admin Overview{% endblock %}
+{% block sidebar_nav %}
+<div class="nav-section-label">Admin Panel</div>
+<a class="nav-item active" href="/admin-panel/"><span class="nav-icon">📊</span> Overview</a>
+<a class="nav-item" href="/admin-panel/users/"><span class="nav-icon">👥</span> Users</a>
+<a class="nav-item" href="/admin-panel/draws/"><span class="nav-icon">🎲</span> Draw Engine</a>
+<a class="nav-item" href="/admin-panel/charities/"><span class="nav-icon">💚</span> Charities</a>
+<a class="nav-item" href="/admin-panel/winners/"><span class="nav-icon">✅</span> Winners</a>
+{% endblock %}
+{% block content %}
+<div class="stat-row mb-20">
+  <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value text-primary" id="sTotal">—</div><div class="stat-sub" id="sNew">— new this month</div></div>
+  <div class="stat-card"><div class="stat-label">Active Subs</div><div class="stat-value text-accent" id="sSubs">—</div><div class="stat-sub" id="sSubSub">—</div></div>
+  <div class="stat-card"><div class="stat-label">Prize Pool</div><div class="stat-value text-gold" id="sPool">—</div><div class="stat-sub">This month</div></div>
+  <div class="stat-card"><div class="stat-label">Charity Pool</div><div class="stat-value text-primary" id="sCharity">—</div><div class="stat-sub">This month</div></div>
+</div>
+<div class="grid-2 mb-20">
+  <div class="card">
+    <div class="card-title">⚡ Quick Actions</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <a href="/admin-panel/draws/" class="btn btn-accent" style="justify-content:center;">🎲 Manage Draws</a>
+      <a href="/admin-panel/winners/" class="btn btn-outline" style="justify-content:center;" id="pendingVerBtn">✅ Review Winners</a>
+      <a href="/admin-panel/users/" class="btn btn-outline" style="justify-content:center;">👥 Manage Users</a>
+      <a href="/admin-panel/charities/" class="btn btn-outline" style="justify-content:center;">💚 Manage Charities</a>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">📊 Prize Pool Breakdown</div>
+    <div id="prizeBreakdown"><div class="text-muted text-sm">Loading…</div></div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">Latest Draw</div>
+  <div id="latestDrawBlock"><div class="text-muted text-sm">Loading…</div></div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+requireAdmin();
+async function loadAdminDash() {
+  const res = await apiGet('dashboard/admin-dashboard/');
+  if (!res.status) { showToast('Failed to load','error'); return; }
+  const d = res.data;
+  document.getElementById('sTotal').textContent  = d.users.total.toLocaleString();
+  document.getElementById('sNew').textContent    = `+${d.users.new_this_month} new this month`;
+  document.getElementById('sSubs').textContent   = d.subscriptions.active_total;
+  document.getElementById('sSubSub').textContent = `Monthly: ${d.subscriptions.monthly} · Yearly: ${d.subscriptions.yearly}`;
+  document.getElementById('sPool').textContent   = fmtMoney(d.prize_pool.total);
+  document.getElementById('sCharity').textContent= fmtMoney(d.prize_pool.charity_pool);
+
+  if (d.winners.pending_verifications > 0) {
+    document.getElementById('pendingVerBtn').innerHTML = `✅ Review Winners <span class="nav-badge">${d.winners.pending_verifications}</span>`;
+  }
+
+  document.getElementById('prizeBreakdown').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${[['5-Match Jackpot','prize_5_match','gold'],['4-Match Prize','prize_4_match','accent-lt'],['3-Match Prize','prize_3_match','primary-lt']].map(([label,key,col])=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+          <span class="text-sm">${label}</span>
+          <strong style="color:var(--${col});">${fmtMoney(d.prize_pool[key])}</strong>
+        </div>`).join('')}
+      <div class="text-muted text-xs mt-8">${d.subscriptions.active_total} active subscribers contributing</div>
+    </div>`;
+
+  const ld = d.draws.latest;
+  document.getElementById('latestDrawBlock').innerHTML = ld ? `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+      <div><div style="font-weight:700;">${ld.title||'Draw'}</div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+          ${(ld.winning_numbers||[]).map(n=>`<div class="draw-ball" style="width:40px;height:40px;font-size:15px;">${n}</div>`).join('')}
+        </div>
+      </div>
+      <div style="text-align:right;">
+        ${ld.jackpot_claimed?'<span class="badge badge-green">Jackpot Claimed</span>':'<span class="badge badge-gold">Jackpot Rolled Over</span>'}
+      </div>
+    </div>` : '<div class="text-muted text-sm">No draw published yet. <a href="/admin-panel/draws/" style="color:var(--primary-lt);">Create one →</a></div>';
+}
+document.addEventListener('DOMContentLoaded', loadAdminDash);
+</script>{% endblock %}

@@ -1,0 +1,126 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Draw Engine – Digital Heroes{% endblock %}
+{% block page_title %}Draw Engine{% endblock %}
+{% block sidebar_nav %}
+<div class="nav-section-label">Admin Panel</div>
+<a class="nav-item" href="/admin-panel/"><span class="nav-icon">📊</span> Overview</a>
+<a class="nav-item" href="/admin-panel/users/"><span class="nav-icon">👥</span> Users</a>
+<a class="nav-item active" href="/admin-panel/draws/"><span class="nav-icon">🎲</span> Draw Engine</a>
+<a class="nav-item" href="/admin-panel/charities/"><span class="nav-icon">💚</span> Charities</a>
+<a class="nav-item" href="/admin-panel/winners/"><span class="nav-icon">✅</span> Winners</a>
+{% endblock %}
+{% block content %}
+<div id="alertBox" class="mb-16"></div>
+<!-- Create Draw -->
+<div class="card card-accent-glow mb-20">
+  <div class="card-title">🎲 Configure New Draw</div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">Title</label><input type="text" class="form-control" id="drawTitle" placeholder="May 2026 Draw" /></div>
+    <div class="form-group"><label class="form-label">Month</label><input type="number" class="form-control" id="drawMonth" min="1" max="12" value="5" /></div>
+    <div class="form-group"><label class="form-label">Year</label><input type="number" class="form-control" id="drawYear" value="2026" /></div>
+  </div>
+  <div class="form-group mt-12">
+    <label class="form-label">Algorithm</label>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="drawType" value="random" checked /> <span>🎲 Random (standard lottery)</span></label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="drawType" value="algorithmic" /> <span>📊 Algorithmic (frequency-weighted)</span></label>
+    </div>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-accent" id="createBtn" onclick="createDraw()">Create Draw</button>
+  </div>
+</div>
+
+<!-- Simulate + Publish -->
+<div class="card mb-20">
+  <div class="card-title">⚙️ Run Draw</div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">Draw ID</label><input type="number" class="form-control" id="runDrawId" placeholder="Draw ID" /></div>
+    <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-outline" id="simBtn" onclick="simulateDraw()">▶ Simulate</button>
+      <button class="btn btn-primary" id="pubBtn" onclick="publishDraw()">🚀 Publish Official Draw</button>
+    </div>
+  </div>
+  <div id="simResult" class="mt-16"></div>
+</div>
+
+<!-- Draws table -->
+<div class="card">
+  <div class="card-title">Draw History</div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Month/Year</th><th>Status</th><th>Pool</th><th>Jackpot</th><th>Numbers</th></tr></thead>
+    <tbody id="drawTable"><tr><td colspan="8" class="text-muted">Loading…</td></tr></tbody>
+  </table></div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+requireAdmin();
+async function loadDraws() {
+  const res = await apiPost('draws/draw-list/', { limit:20 });
+  document.getElementById('drawTable').innerHTML = (res.data||[]).map(d=>`
+    <tr>
+      <td>#${d.draw_id}</td><td>${d.title}</td><td>${d.draw_type}</td>
+      <td>${d.draw_month}/${d.draw_year}</td><td>${statusBadge(d.status)}</td>
+      <td>${fmtMoney(d.prize_pool_total)}</td>
+      <td>${d.jackpot_claimed?'<span class="badge badge-green">Claimed</span>':'<span class="badge badge-gold">Rolled</span>'}</td>
+      <td style="font-size:12px;">${(d.winning_numbers||[]).join(' · ')||'—'}</td>
+    </tr>`).join('') || '<tr><td colspan="8" class="text-muted">No draws yet.</td></tr>';
+}
+async function createDraw() {
+  const btn  = document.getElementById('createBtn');
+  setLoading(btn, true);
+  const res  = await apiPost('draws/create-draw/', {
+    title:      document.getElementById('drawTitle').value,
+    draw_type:  document.querySelector('input[name="drawType"]:checked').value,
+    draw_month: parseInt(document.getElementById('drawMonth').value),
+    draw_year:  parseInt(document.getElementById('drawYear').value),
+  });
+  setLoading(btn, false);
+  if (res.status) { showToast('Draw created! ID: ' + res.data.draw_id, 'success'); document.getElementById('runDrawId').value = res.data.draw_id; loadDraws(); }
+  else document.getElementById('alertBox').innerHTML = `<div class="alert alert-error">⚠️ ${res.error||JSON.stringify(res.errors)}</div>`;
+}
+async function simulateDraw() {
+  const btn = document.getElementById('simBtn');
+  const id  = document.getElementById('runDrawId').value;
+  if (!id) { showToast('Enter a draw ID', 'warning'); return; }
+  setLoading(btn, true);
+  const res = await apiPost('draws/simulate-draw/', { draw_id: parseInt(id) });
+  setLoading(btn, false);
+  if (res.status) {
+    const nums = res.data.simulated_numbers;
+    document.getElementById('simResult').innerHTML = `
+      <div class="card" style="background:linear-gradient(135deg,#1a0d2e,var(--card));border-color:rgba(124,58,237,0.3);">
+        <div class="badge badge-gold mb-12">SIMULATION — not official</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          ${nums.map((n,i)=>`<div class="draw-ball" style="animation-delay:${i*0.1}s">${n}</div>`).join('')}
+        </div>
+        <div class="text-muted text-xs mt-12">Prize pool: ${fmtMoney(res.data.prize_pool)}</div>
+      </div>`;
+    loadDraws();
+  } else showToast(res.error, 'error');
+}
+async function publishDraw() {
+  const id = document.getElementById('runDrawId').value;
+  if (!id) { showToast('Enter a draw ID', 'warning'); return; }
+  if (!confirm('Publish this draw? This is the OFFICIAL result and cannot be undone.')) return;
+  const btn = document.getElementById('pubBtn');
+  setLoading(btn, true);
+  const res = await apiPost('draws/publish-draw/', { draw_id: parseInt(id) });
+  setLoading(btn, false);
+  if (res.status) {
+    const nums = res.data.winning_numbers;
+    document.getElementById('simResult').innerHTML = `
+      <div class="card card-glow">
+        <div class="badge badge-green mb-12">✅ PUBLISHED — Official Result</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+          ${nums.map((n,i)=>`<div class="draw-ball" style="animation-delay:${i*0.1}s">${n}</div>`).join('')}
+        </div>
+        <div class="text-sm">${res.data.winners.length} winners found</div>
+        <div class="text-muted text-xs mt-8">Jackpot: ${res.data.jackpot_claimed?'CLAIMED 🏆':'Rolled over → £'+res.data.jackpot_rollover}</div>
+      </div>`;
+    showToast('Draw published successfully!', 'success');
+    loadDraws();
+  } else showToast(res.error, 'error');
+}
+document.addEventListener('DOMContentLoaded', loadDraws);
+</script>{% endblock %}

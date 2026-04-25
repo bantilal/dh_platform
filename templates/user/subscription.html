@@ -1,0 +1,80 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Subscription – Digital Heroes{% endblock %}
+{% block page_title %}My Subscription{% endblock %}
+{% block sidebar_nav %}
+<div class="nav-section-label">My Account</div>
+<a class="nav-item" href="/dashboard/"><span class="nav-icon">🏠</span> Dashboard</a>
+<a class="nav-item" href="/scores/"><span class="nav-icon">⛳</span> My Scores</a>
+<a class="nav-item" href="/draws/"><span class="nav-icon">🎯</span> Draws</a>
+<a class="nav-item" href="/charity/"><span class="nav-icon">💚</span> Charity</a>
+<a class="nav-item" href="/winnings/"><span class="nav-icon">🏆</span> Winnings</a>
+<a class="nav-item active" href="/subscription/"><span class="nav-icon">💳</span> Subscription</a>
+{% endblock %}
+{% block content %}
+<div id="alertBox" class="mb-16"></div>
+<div class="card card-glow mb-20" id="subCard"><div class="text-muted">Loading…</div></div>
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Switch Plan</div>
+    <div style="display:flex;flex-direction:column;gap:10px;" id="planCards">
+      <div class="card" style="cursor:pointer;border-color:var(--primary);" onclick="subscribe('monthly')">
+        <div style="font-weight:700;">Monthly</div>
+        <div style="font-size:26px;font-weight:800;color:var(--primary-lt);">£9.99<span style="font-size:13px;color:var(--text-muted);">/mo</span></div>
+        <div class="text-muted text-xs mt-8">Cancel anytime</div>
+      </div>
+      <div class="card" style="cursor:pointer;" onclick="subscribe('yearly')">
+        <div style="font-weight:700;">Yearly <span class="badge badge-green">Save 25%</span></div>
+        <div style="font-size:26px;font-weight:800;color:var(--gold);">£89.99<span style="font-size:13px;color:var(--text-muted);">/yr</span></div>
+        <div class="text-muted text-xs mt-8">Best value</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Payment History</div>
+    <div id="payHist"><div class="text-muted text-sm">Loading…</div></div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+requireAuth();
+async function loadSub() {
+  const [subRes, payRes] = await Promise.all([apiGet('subscriptions/view/'), apiGet('subscriptions/payment-history/')]);
+  const s = subRes.data;
+  const card = document.getElementById('subCard');
+  if (s) {
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+        <div>${statusBadge(s.status)}<div style="font-family:var(--font-serif);font-size:26px;margin-top:10px;">${s.plan.charAt(0).toUpperCase()+s.plan.slice(1)} Plan</div>
+          <div class="text-muted mt-8">Renews ${fmtDate(s.renewal_date)} · Auto-renew ${s.auto_renew?'on':'off'}</div></div>
+        <div style="text-align:right;"><div style="font-size:36px;font-weight:800;color:var(--primary-lt);">${fmtMoney(s.amount)}<span style="font-size:14px;color:var(--text-muted);">/${s.plan==='monthly'?'mo':'yr'}</span></div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+        <div style="padding:12px;background:var(--bg2);border-radius:10px;"><div class="text-muted text-xs">Prize Pool (40%)</div><div style="font-weight:700;color:var(--gold);">${fmtMoney(s.prize_pool_amount)}</div></div>
+        <div style="padding:12px;background:var(--bg2);border-radius:10px;"><div class="text-muted text-xs">Charity (${s.charity_percent}%)</div><div style="font-weight:700;color:var(--primary-lt);">${fmtMoney(s.charity_amount)}</div></div>
+        <div style="padding:12px;background:var(--bg2);border-radius:10px;"><div class="text-muted text-xs">Platform</div><div style="font-weight:700;">${fmtMoney(parseFloat(s.amount)-parseFloat(s.prize_pool_amount)-parseFloat(s.charity_amount))}</div></div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="cancelSub()">Cancel Subscription</button>`;
+  } else {
+    card.innerHTML = `<div class="alert alert-warning">No active subscription. Choose a plan on the left.</div>`;
+  }
+  const hist = payRes.data || [];
+  document.getElementById('payHist').innerHTML = hist.length
+    ? hist.slice(0,8).map(h=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div><div class="text-sm">${h.description||'Payment'}</div><div class="text-muted text-xs">${fmtDate(h.date)}</div></div>
+        <div>${statusBadge(h.status)} <strong>${fmtMoney(h.amount)}</strong></div></div>`).join('')
+    : '<div class="text-muted text-sm">No payment history.</div>';
+}
+async function subscribe(plan) {
+  if (!confirm(`Switch to ${plan} plan?`)) return;
+  const res = await apiPost('subscriptions/create/', { plan, charity_percent:10 });
+  if (res.status) { showToast('Plan updated!','success'); loadSub(); }
+  else showToast(res.error,'error');
+}
+async function cancelSub() {
+  if (!confirm('Are you sure you want to cancel your subscription?')) return;
+  const res = await apiPost('subscriptions/cancel/', {});
+  if (res.status) { showToast('Subscription cancelled','info'); loadSub(); }
+  else showToast(res.error,'error');
+}
+document.addEventListener('DOMContentLoaded', loadSub);
+</script>{% endblock %}

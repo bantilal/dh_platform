@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Dashboard – Digital Heroes{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block sidebar_nav %}
+<div class="nav-section-label">My Account</div>
+<a class="nav-item active" data-href="/dashboard/" href="/dashboard/"><span class="nav-icon">🏠</span> Dashboard</a>
+<a class="nav-item" data-href="/scores/" href="/scores/"><span class="nav-icon">⛳</span> My Scores</a>
+<a class="nav-item" data-href="/draws/" href="/draws/"><span class="nav-icon">🎯</span> Draws</a>
+<a class="nav-item" data-href="/charity/" href="/charity/"><span class="nav-icon">💚</span> Charity</a>
+<a class="nav-item" data-href="/winnings/" href="/winnings/"><span class="nav-icon">🏆</span> Winnings</a>
+<a class="nav-item" data-href="/subscription/" href="/subscription/"><span class="nav-icon">💳</span> Subscription</a>
+{% endblock %}
+
+{% block content %}
+<!-- Welcome Banner -->
+<div class="card" id="welcomeBanner" style="background:linear-gradient(135deg,rgba(5,150,105,0.15),var(--card));border-color:rgba(5,150,105,0.3);margin-bottom:20px;">
+  <div style="font-family:var(--font-serif);font-size:22px;" id="welcomeMsg">Good morning! 👋</div>
+  <div class="text-muted mt-8" id="welcomeSub">Your next draw is approaching. Keep your scores updated!</div>
+  <div class="flex-row flex-wrap mt-12" id="welcomeBadges"></div>
+</div>
+
+<!-- Stat Row -->
+<div class="stat-row mb-20" id="statRow">
+  <div class="stat-card"><div class="stat-label">Subscription</div><div class="stat-value text-primary" id="statSub">—</div><div class="stat-sub" id="statSubSub">—</div></div>
+  <div class="stat-card"><div class="stat-label">Total Won</div><div class="stat-value text-gold" id="statWon">—</div><div class="stat-sub">All time</div></div>
+  <div class="stat-card"><div class="stat-label">Latest Score</div><div class="stat-value text-accent" id="statScore">—</div><div class="stat-sub">Stableford pts</div></div>
+  <div class="stat-card"><div class="stat-label">Draws Entered</div><div class="stat-value" id="statDraws">—</div><div class="stat-sub">Total participated</div></div>
+</div>
+
+<!-- Scores + Charity Row -->
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px;" class="dash-grid">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title" style="margin:0;">My Last 5 Scores</div>
+      <a href="/scores/" class="btn btn-ghost btn-sm">Manage →</a>
+    </div>
+    <div id="scoresList"><div class="text-muted text-sm">Loading scores…</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">My Charity</div>
+    <div id="charityBlock"><div class="text-muted text-sm">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Draw + Winnings Row -->
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Latest Draw</div>
+    <div id="drawBlock"><div class="text-muted text-sm">Loading draw info…</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Recent Winnings</div>
+    <div id="winningsBlock"><div class="text-muted text-sm">Loading…</div></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+requireAuth();
+
+async function loadDashboard() {
+  const res = await apiGet('dashboard/user-dashboard/');
+  if (!res.status) { showToast(res.error || 'Failed to load dashboard', 'error'); return; }
+  const d = res.data;
+
+  // Welcome
+  document.getElementById('welcomeMsg').textContent = `Good day, ${d.user.first_name}! 👋`;
+  const badges = document.getElementById('welcomeBadges');
+  if (d.subscription?.is_active) badges.innerHTML += `<span class="badge badge-green dot">Active Subscriber</span> `;
+  if (d.subscription?.plan) badges.innerHTML += `<span class="badge badge-violet">${d.subscription.plan}</span> `;
+  if (d.draws?.total_participated) badges.innerHTML += `<span class="badge badge-gold">${d.draws.total_participated} Draws Entered</span>`;
+
+  // Stats
+  document.getElementById('statSub').textContent   = d.subscription?.is_active ? 'Active' : (d.subscription?.status || 'None');
+  document.getElementById('statSubSub').textContent = d.subscription ? `Renews ${fmtDate(d.subscription.renewal_date)}` : 'No active plan';
+  document.getElementById('statWon').textContent    = fmtMoney(d.winnings?.total_won);
+  document.getElementById('statScore').textContent  = d.scores?.[0]?.score ? d.scores[0].score + ' pts' : '—';
+  document.getElementById('statDraws').textContent  = d.draws?.total_participated || 0;
+
+  // Scores
+  const sl = document.getElementById('scoresList');
+  if (d.scores?.length) {
+    sl.innerHTML = d.scores.map((s, i) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:12px;">
+          ${fmtScore(s.score)}
+          <div>
+            <div style="font-size:13px;font-weight:600;">${fmtDate(s.score_date)}</div>
+            ${i === 0 ? '<span class="badge badge-green" style="font-size:10px;">Latest</span>' : ''}
+          </div>
+        </div>
+        <div style="font-size:20px;font-weight:800;font-family:var(--font-serif);">${s.score}</div>
+      </div>`).join('');
+  } else {
+    sl.innerHTML = '<div class="alert alert-info" style="margin-top:8px;">No scores yet. <a href="/scores/" style="color:var(--accent-lt);">Add your first score →</a></div>';
+  }
+
+  // Charity
+  const cb = document.getElementById('charityBlock');
+  if (d.charity) {
+    cb.innerHTML = `
+      <div style="text-align:center;padding:12px 0;">
+        <div style="font-size:40px;margin-bottom:8px;">💚</div>
+        <div style="font-weight:700;">${d.charity.name}</div>
+        <div class="text-muted text-sm mt-8">My contribution</div>
+        <div style="font-size:28px;font-weight:800;color:var(--primary-lt);">${d.charity.my_percent}</div>
+        <div class="text-muted text-xs">of each subscription</div>
+      </div>
+      <a href="/charity/" class="btn btn-ghost btn-sm w-full" style="justify-content:center;margin-top:8px;">Change Charity</a>`;
+  } else {
+    cb.innerHTML = `<div class="alert alert-warning">No charity selected. <a href="/charity/" style="color:var(--gold);">Choose one →</a></div>`;
+  }
+
+  // Draw
+  const db = document.getElementById('drawBlock');
+  if (d.draws?.latest_draw) {
+    const draw = d.draws.latest_draw;
+    const nums = draw.winning_numbers || [];
+    db.innerHTML = `
+      <div class="badge badge-green mb-16">Published</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px;">${draw.title || draw.draw_month + '/' + draw.draw_year}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        ${nums.map(n => `<div class="draw-ball" style="width:42px;height:42px;font-size:16px;">${n}</div>`).join('')}
+      </div>
+      <a href="/draws/" class="btn btn-ghost btn-sm">View All Draws →</a>`;
+  } else {
+    db.innerHTML = `<div class="text-muted text-sm">No draw published yet.</div>
+      ${d.draws?.upcoming_draw ? `<div class="badge badge-violet mt-12">Upcoming: ${d.draws.upcoming_draw.draw_month}/${d.draws.upcoming_draw.draw_year}</div>` : ''}`;
+  }
+
+  // Winnings
+  const wb = document.getElementById('winningsBlock');
+  if (d.winnings?.recent_wins?.length) {
+    wb.innerHTML = d.winnings.recent_wins.map(w => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-size:13px;font-weight:600;">${w.match_type.replace('_', ' ')}</div>
+          <div class="text-muted text-xs">${fmtDate(w.created_at)}</div>
+        </div>
+        <div style="font-weight:700;color:var(--gold);">${fmtMoney(w.prize_amount)}</div>
+      </div>`).join('') +
+      `<div class="text-muted text-xs mt-12">Total: <strong class="text-gold">${fmtMoney(d.winnings.total_won)}</strong></div>`;
+  } else {
+    wb.innerHTML = '<div class="text-muted text-sm">No winnings yet. Keep playing!</div>';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadDashboard);
+</script>
+{% endblock %}

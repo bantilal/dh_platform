@@ -1,0 +1,93 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Charities – Digital Heroes{% endblock %}
+{% block page_title %}Charity Management{% endblock %}
+{% block sidebar_nav %}
+<div class="nav-section-label">Admin Panel</div>
+<a class="nav-item" href="/admin-panel/"><span class="nav-icon">📊</span> Overview</a>
+<a class="nav-item" href="/admin-panel/users/"><span class="nav-icon">👥</span> Users</a>
+<a class="nav-item" href="/admin-panel/draws/"><span class="nav-icon">🎲</span> Draw Engine</a>
+<a class="nav-item active" href="/admin-panel/charities/"><span class="nav-icon">💚</span> Charities</a>
+<a class="nav-item" href="/admin-panel/winners/"><span class="nav-icon">✅</span> Winners</a>
+{% endblock %}
+{% block content %}
+<div id="alertBox" class="mb-16"></div>
+<!-- Add Charity -->
+<div class="card card-glow mb-20">
+  <div class="card-title">➕ Add Charity</div>
+  <form id="addCharityForm" onsubmit="addCharity(event)" enctype="multipart/form-data">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Name *</label><input type="text" class="form-control" id="cName" placeholder="Charity name" required /></div>
+      <div class="form-group"><label class="form-label">Category</label><input type="text" class="form-control" id="cCat" placeholder="Environment, Health…" /></div>
+      <div class="form-group"><label class="form-label">Website</label><input type="url" class="form-control" id="cWeb" placeholder="https://…" /></div>
+    </div>
+    <div class="form-group mt-12">
+      <label class="form-label">Description *</label>
+      <textarea class="form-control" id="cDesc" rows="3" placeholder="Describe this charity…" required style="resize:vertical;"></textarea>
+    </div>
+    <div class="form-row mt-12">
+      <div class="form-group"><label class="form-label">Short Bio</label><input type="text" class="form-control" id="cBio" placeholder="One-line tagline" /></div>
+      <div class="form-group"><label class="form-label">Logo</label><input type="file" class="form-control" id="cLogo" accept="image/*" /></div>
+      <div class="form-group" style="align-self:flex-end;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="cFeatured" /> <span class="form-label" style="margin:0;">Featured charity</span>
+        </label>
+      </div>
+    </div>
+    <div class="form-actions"><button type="submit" class="btn btn-primary" id="addCharBtn">💚 Add Charity</button></div>
+  </form>
+</div>
+<!-- Charity List -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title" style="margin:0;">All Charities</div>
+    <input type="text" class="form-control" id="charSearch" placeholder="🔍 Search…" oninput="loadCharities()" style="max-width:200px;" />
+  </div>
+  <div class="charity-grid" id="charGrid"><div class="text-muted">Loading…</div></div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+requireAdmin();
+const emojis=['🌿','👶','🏠','🧠','🌊','🍽️','❤️','🌍','🎓','🐾'];
+async function loadCharities() {
+  const q   = document.getElementById('charSearch').value;
+  const res = await apiPost('charities/charity-list/', { search: q, limit:50 });
+  document.getElementById('charGrid').innerHTML = (res.data||[]).map((c,i)=>`
+    <div class="charity-card">
+      <div style="display:flex;justify-content:space-between;">
+        <div style="font-size:28px;">${emojis[i%emojis.length]}</div>
+        ${c.is_featured?'<span class="badge badge-gold">Featured</span>':''}
+      </div>
+      <div style="font-weight:700;margin-top:8px;">${c.name}</div>
+      ${c.category?`<span class="badge badge-green" style="margin-top:6px;">${c.category}</span>`:''}
+      <div style="color:var(--primary-lt);font-size:13px;font-weight:600;margin-top:8px;">${fmtMoney(c.total_received)} raised</div>
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        <button class="btn btn-danger btn-sm" onclick="deleteCharity(${c.charity_id})">Delete</button>
+      </div>
+    </div>`).join('') || '<div class="text-muted">No charities found.</div>';
+}
+async function addCharity(e) {
+  e.preventDefault();
+  const btn = document.getElementById('addCharBtn');
+  setLoading(btn, true);
+  const fd = new FormData();
+  fd.append('name',        document.getElementById('cName').value);
+  fd.append('description', document.getElementById('cDesc').value);
+  fd.append('category',    document.getElementById('cCat').value);
+  fd.append('website',     document.getElementById('cWeb').value);
+  fd.append('short_bio',   document.getElementById('cBio').value);
+  fd.append('is_featured', document.getElementById('cFeatured').checked);
+  const logo = document.getElementById('cLogo').files[0];
+  if (logo) fd.append('logo', logo);
+  const res = await apiPost('charities/add-charity/', fd, true);
+  setLoading(btn, false);
+  if (res.status) { showToast('Charity added!','success'); document.getElementById('addCharityForm').reset(); loadCharities(); }
+  else document.getElementById('alertBox').innerHTML=`<div class="alert alert-error">⚠️ ${res.error||JSON.stringify(res.errors)}</div>`;
+}
+async function deleteCharity(id) {
+  if (!confirm('Delete this charity?')) return;
+  const res = await apiPost('charities/delete-charity/', { id });
+  if (res.status) { showToast('Deleted','success'); loadCharities(); }
+  else showToast(res.error,'error');
+}
+document.addEventListener('DOMContentLoaded', loadCharities);
+</script>{% endblock %}

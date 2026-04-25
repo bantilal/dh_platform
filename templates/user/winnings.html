@@ -1,0 +1,87 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Winnings – Digital Heroes{% endblock %}
+{% block page_title %}My Winnings{% endblock %}
+{% block sidebar_nav %}
+<div class="nav-section-label">My Account</div>
+<a class="nav-item" href="/dashboard/"><span class="nav-icon">🏠</span> Dashboard</a>
+<a class="nav-item" href="/scores/"><span class="nav-icon">⛳</span> My Scores</a>
+<a class="nav-item" href="/draws/"><span class="nav-icon">🎯</span> Draws</a>
+<a class="nav-item" href="/charity/"><span class="nav-icon">💚</span> Charity</a>
+<a class="nav-item active" href="/winnings/"><span class="nav-icon">🏆</span> Winnings</a>
+<a class="nav-item" href="/subscription/"><span class="nav-icon">💳</span> Subscription</a>
+{% endblock %}
+{% block content %}
+<div class="stat-row mb-20" id="winStats">
+  <div class="stat-card"><div class="stat-label">Total Won</div><div class="stat-value text-gold" id="totalWon">—</div></div>
+  <div class="stat-card"><div class="stat-label">Pending Payout</div><div class="stat-value text-accent" id="pendingPay">—</div></div>
+</div>
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">🏆 My Verifications</div>
+    <div id="verList"><div class="text-muted text-sm">Loading…</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">📤 Submit Winner Proof</div>
+    <div id="alertBox" class="mb-16"></div>
+    <div class="form-group mb-16">
+      <label class="form-label">Draw ID</label>
+      <input type="number" class="form-control" id="proofDrawId" placeholder="e.g. 3" />
+    </div>
+    <div class="form-group mb-16">
+      <label class="form-label">Proof File (screenshot)</label>
+      <input type="file" class="form-control" id="proofFile" accept="image/*,.pdf" />
+    </div>
+    <div class="form-group mb-16">
+      <label class="form-label">Notes (optional)</label>
+      <input type="text" class="form-control" id="proofNotes" placeholder="Any additional info" />
+    </div>
+    <button class="btn btn-primary" id="submitProofBtn" onclick="submitProof()">📤 Submit Proof</button>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+requireAuth();
+async function load() {
+  const [dashRes, verRes] = await Promise.all([apiGet('dashboard/user-dashboard/'), apiGet('winners/view-verification/')]);
+  const w = dashRes.data?.winnings;
+  document.getElementById('totalWon').textContent   = fmtMoney(w?.total_won);
+  document.getElementById('pendingPay').textContent = fmtMoney(w?.pending_payment);
+
+  const vers = verRes.data || [];
+  document.getElementById('verList').innerHTML = vers.length
+    ? vers.map(v=>`
+        <div style="padding:14px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-weight:600;">${v.match_type.replace('_',' ')} — Draw #${v.draw_id}</div>
+              <div class="text-muted text-xs">${fmtDate(v.created_at)}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              ${statusBadge(v.status)}
+              <span class="badge ${v.payment_status==='paid'?'badge-green':'badge-gold'}">${v.payment_status}</span>
+            </div>
+          </div>
+          <div style="font-size:22px;font-weight:800;color:var(--gold);margin-top:6px;">${fmtMoney(v.prize_amount)}</div>
+          ${v.rejection_note?`<div class="alert alert-error" style="margin-top:8px;font-size:12px;">Rejected: ${v.rejection_note}</div>`:''}
+        </div>`).join('')
+    : '<div class="text-muted text-sm">No verifications yet. Win a draw to submit proof!</div>';
+}
+
+async function submitProof() {
+  const btn     = document.getElementById('submitProofBtn');
+  const drawId  = document.getElementById('proofDrawId').value;
+  const file    = document.getElementById('proofFile').files[0];
+  document.getElementById('alertBox').innerHTML = '';
+  if (!drawId||!file) { document.getElementById('alertBox').innerHTML='<div class="alert alert-error">⚠️ Draw ID and proof file are required.</div>'; return; }
+  setLoading(btn, true);
+  const fd = new FormData();
+  fd.append('draw_id', drawId);
+  fd.append('proof_file', file);
+  fd.append('proof_notes', document.getElementById('proofNotes').value);
+  const res = await apiPost('winners/submit-proof/', fd, true);
+  setLoading(btn, false);
+  if (res.status) { showToast('Proof submitted!','success'); load(); }
+  else document.getElementById('alertBox').innerHTML=`<div class="alert alert-error">⚠️ ${res.error||JSON.stringify(res.errors)}</div>`;
+}
+document.addEventListener('DOMContentLoaded', load);
+</script>{% endblock %}

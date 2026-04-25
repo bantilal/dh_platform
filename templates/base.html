@@ -1,0 +1,79 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Digital Heroes{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{% static 'css/style.css' %}" />
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<div class="app-layout">
+
+  <!-- Sidebar Overlay (mobile) -->
+  <div class="sidebar-overlay"></div>
+
+  <!-- ── Sidebar ─────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand">
+        <div class="brand-icon">🌿</div>
+        <span>Digital Heroes</span>
+      </div>
+      <div class="tagline">Play · Give · Win</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      {% block sidebar_nav %}{% endblock %}
+    </nav>
+
+    <div class="sidebar-user">
+      <div class="user-avatar">JS</div>
+      <div class="user-info">
+        <div class="user-name">Loading…</div>
+        <div class="user-role">Subscriber</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ────────────────────────────────── -->
+  <div class="main-content">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger">☰</button>
+        <span class="page-title">{% block page_title %}Dashboard{% endblock %}</span>
+      </div>
+      <div class="topbar-right">
+        {% block topbar_right %}
+        <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
+        {% endblock %}
+      </div>
+    </header>
+
+    <!-- Page content -->
+    <div class="page-body fade-up">
+      {% block content %}{% endblock %}
+    </div>
+
+  </div>
+</div>
+
+<script src="{% static 'js/app.js' %}"></script>
+<script>
+async function doLogout() {
+  const refresh = localStorage.getItem('dh_refresh');
+  if (refresh) await apiPost('auth/logout/', { refresh }).catch(() => {});
+  Auth.clear();
+  window.location.href = '/login/';
+}
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

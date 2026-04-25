@@ -1,0 +1,97 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Users – Digital Heroes{% endblock %}
+{% block page_title %}User Management{% endblock %}
+{% block sidebar_nav %}
+<div class="nav-section-label">Admin Panel</div>
+<a class="nav-item" href="/admin-panel/"><span class="nav-icon">📊</span> Overview</a>
+<a class="nav-item active" href="/admin-panel/users/"><span class="nav-icon">👥</span> Users</a>
+<a class="nav-item" href="/admin-panel/draws/"><span class="nav-icon">🎲</span> Draw Engine</a>
+<a class="nav-item" href="/admin-panel/charities/"><span class="nav-icon">💚</span> Charities</a>
+<a class="nav-item" href="/admin-panel/winners/"><span class="nav-icon">✅</span> Winners</a>
+{% endblock %}
+{% block content %}
+<div id="alertBox" class="mb-16"></div>
+<div class="card mb-20">
+  <div class="card-header">
+    <div class="card-title" style="margin:0;">All Users</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <input type="text" class="form-control" id="searchQ" placeholder="🔍 Search email…" oninput="loadUsers(1)" style="max-width:220px;" />
+      <select class="form-control" id="roleFilter" onchange="loadUsers(1)" style="max-width:160px;">
+        <option value="">All Roles</option>
+        <option value="public">Public</option>
+        <option value="subscriber">Subscriber</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+      <tbody id="userTable"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>
+    </table>
+  </div>
+  <div id="pagination"></div>
+</div>
+
+<!-- Add User -->
+<div class="card">
+  <div class="card-title">➕ Add New User</div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">First Name</label><input type="text" class="form-control" id="newFirst" placeholder="John" /></div>
+    <div class="form-group"><label class="form-label">Last Name</label><input type="text" class="form-control" id="newLast" placeholder="Smith" /></div>
+    <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-control" id="newEmail" placeholder="john@example.com" /></div>
+    <div class="form-group"><label class="form-label">Role</label>
+      <select class="form-control" id="newRole"><option value="public">Public</option><option value="subscriber">Subscriber</option><option value="admin">Admin</option></select>
+    </div>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" id="addUserBtn" onclick="addUser()">Add User</button>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+requireAdmin();
+async function loadUsers(page=1) {
+  const res = await apiPost('auth/user-list/', { page, limit:10, search: document.getElementById('searchQ').value, role: document.getElementById('roleFilter').value });
+  document.getElementById('userTable').innerHTML = (res.data||[]).map(u=>`
+    <tr>
+      <td>#${u.user_id}</td>
+      <td>${u.first_name} ${u.last_name||''}</td>
+      <td>${u.email}</td>
+      <td>${statusBadge(u.role)}</td>
+      <td><span class="badge ${u.is_active?'badge-green':'badge-red'}">${u.is_active?'Active':'Disabled'}</span></td>
+      <td>${fmtDate(u.created_at)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="toggleStatus(${u.user_id},this)">${u.is_active?'Disable':'Enable'}</button>
+        <button class="btn btn-outline btn-sm" onclick="viewUser(${u.user_id})">View</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="7" class="text-muted">No users found.</td></tr>';
+  renderPagination(document.getElementById('pagination'), res.current_page, res.total_pages,
+    `function(p){loadUsers(p)}`);
+}
+async function toggleStatus(id) {
+  const res = await apiPost('auth/user-status/', { id });
+  if (res.status) { showToast(res.message,'success'); loadUsers(); }
+  else showToast(res.error,'error');
+}
+async function viewUser(id) {
+  const res = await apiPost('auth/view-user/', { id });
+  if (!res.status) { showToast(res.error,'error'); return; }
+  const u = res.data;
+  alert(`User: ${u.first_name} ${u.last_name||''}\nEmail: ${u.email}\nRole: ${u.role}\nJoined: ${fmtDate(u.created_at)}\nCharity: ${u.charity_id||'None'} (${u.charity_percent}%)`);
+}
+async function addUser() {
+  const btn = document.getElementById('addUserBtn');
+  setLoading(btn, true);
+  const res = await apiPost('auth/add-user/', {
+    first_name: document.getElementById('newFirst').value,
+    last_name:  document.getElementById('newLast').value,
+    email:      document.getElementById('newEmail').value,
+    role:       document.getElementById('newRole').value,
+  });
+  setLoading(btn, false);
+  if (res.status) { showToast('User created!','success'); loadUsers(); ['newFirst','newLast','newEmail'].forEach(id=>document.getElementById(id).value=''); }
+  else document.getElementById('alertBox').innerHTML=`<div class="alert alert-error">⚠️ ${res.error||JSON.stringify(res.errors)}</div>`;
+}
+document.addEventListener('DOMContentLoaded', () => loadUsers(1));
+</script>{% endblock %}

@@ -1,0 +1,93 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Charity – Digital Heroes{% endblock %}
+{% block page_title %}My Charity{% endblock %}
+{% block sidebar_nav %}
+<div class="nav-section-label">My Account</div>
+<a class="nav-item" href="/dashboard/"><span class="nav-icon">🏠</span> Dashboard</a>
+<a class="nav-item" href="/scores/"><span class="nav-icon">⛳</span> My Scores</a>
+<a class="nav-item" href="/draws/"><span class="nav-icon">🎯</span> Draws</a>
+<a class="nav-item active" href="/charity/"><span class="nav-icon">💚</span> Charity</a>
+<a class="nav-item" href="/winnings/"><span class="nav-icon">🏆</span> Winnings</a>
+<a class="nav-item" href="/subscription/"><span class="nav-icon">💳</span> Subscription</a>
+{% endblock %}
+{% block content %}
+<div style="margin-bottom:20px;">
+  <div class="text-muted text-sm">At least 10% of every subscription goes directly to your chosen charity.</div>
+</div>
+<div id="alertBox" class="mb-16"></div>
+<div class="card mb-20">
+  <div class="card-title">Charity Contribution</div>
+  <div class="form-row">
+    <div class="form-group">
+      <label class="form-label">My Contribution %</label>
+      <input type="number" class="form-control" id="charityPct" min="10" max="100" value="10" style="max-width:160px;" />
+      <span class="text-muted text-xs mt-8">Minimum 10% — increase to give more.</span>
+    </div>
+    <div style="display:flex;align-items:flex-end;">
+      <button class="btn btn-primary" onclick="savePct()">Save Percentage</button>
+    </div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <div class="card-title" style="margin:0;">Choose Your Charity</div>
+    <input type="text" class="form-control" id="searchQ" placeholder="🔍 Search…" oninput="filterCharities()" style="max-width:220px;" />
+  </div>
+  <div class="charity-grid" id="charityGrid"><div class="text-muted">Loading charities…</div></div>
+  <button class="btn btn-primary mt-20" id="saveCharityBtn" onclick="saveCharity()" style="display:none;">💚 Save My Charity Selection</button>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+requireAuth();
+let allCharities = [], selectedId = null;
+const user = Auth.user();
+
+async function loadCharities() {
+  const res = await apiPost('charities/charity-list/', { limit:50 });
+  allCharities = res.data || [];
+  renderCharities(allCharities);
+}
+
+function renderCharities(list) {
+  const grid = document.getElementById('charityGrid');
+  const emojis = ['🌿','👶','🏠','🧠','🌊','🍽️','❤️','🌍','🎓','🐾'];
+  grid.innerHTML = list.map((c,i) => `
+    <div class="charity-card ${selectedId==c.charity_id?'selected':''}" onclick="selectCharity(${c.charity_id}, this)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="font-size:32px;">${emojis[i%emojis.length]}</div>
+        ${selectedId==c.charity_id?'<div style="width:22px;height:22px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:12px;">✓</div>':''}
+      </div>
+      <div style="font-weight:700;margin-top:10px;font-size:14px;">${c.name}</div>
+      ${c.category?`<span class="badge badge-green" style="margin-top:6px;">${c.category}</span>`:''}
+      <div style="color:var(--primary-lt);font-size:13px;font-weight:600;margin-top:8px;">${fmtMoney(c.total_received)} raised</div>
+    </div>`).join('');
+}
+
+function selectCharity(id, el) {
+  selectedId = id;
+  renderCharities(allCharities.filter(c=>{ const q=document.getElementById('searchQ').value.toLowerCase(); return !q||c.name.toLowerCase().includes(q); }));
+  document.getElementById('saveCharityBtn').style.display='inline-flex';
+}
+
+function filterCharities() {
+  const q = document.getElementById('searchQ').value.toLowerCase();
+  renderCharities(q ? allCharities.filter(c=>c.name.toLowerCase().includes(q)||c.category?.toLowerCase().includes(q)) : allCharities);
+}
+
+async function saveCharity() {
+  if (!selectedId) { showToast('Please select a charity first','warning'); return; }
+  const res = await apiPost('auth/edit-user/', { charity_id: selectedId, charity_percent: parseFloat(document.getElementById('charityPct').value) });
+  if (res.status) { const u=Auth.user(); u.charity_id=selectedId; localStorage.setItem('dh_user',JSON.stringify(u)); showToast('Charity saved!','success'); }
+  else showToast(res.error,'error');
+}
+
+async function savePct() {
+  const pct = parseFloat(document.getElementById('charityPct').value);
+  if (pct<10) { showToast('Minimum 10% required','error'); return; }
+  const res = await apiPost('auth/edit-user/', { charity_percent: pct });
+  if (res.status) showToast('Contribution updated!','success');
+  else showToast(res.error,'error');
+}
+
+document.addEventListener('DOMContentLoaded', () => { loadCharities(); if(user?.charity_id) selectedId=user.charity_id; });
+</script>{% endblock %}

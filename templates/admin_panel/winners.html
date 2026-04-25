@@ -1,0 +1,135 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Winners – Digital Heroes{% endblock %}
+{% block page_title %}Winner Verification{% endblock %}
+{% block sidebar_nav %}
+<div class="nav-section-label">Admin Panel</div>
+<a class="nav-item" href="/admin-panel/"><span class="nav-icon">📊</span> Overview</a>
+<a class="nav-item" href="/admin-panel/users/"><span class="nav-icon">👥</span> Users</a>
+<a class="nav-item" href="/admin-panel/draws/"><span class="nav-icon">🎲</span> Draw Engine</a>
+<a class="nav-item" href="/admin-panel/charities/"><span class="nav-icon">💚</span> Charities</a>
+<a class="nav-item active" href="/admin-panel/winners/"><span class="nav-icon">✅</span> Winners</a>
+{% endblock %}
+{% block content %}
+<div class="stat-row mb-20">
+  <div class="stat-card"><div class="stat-label">Pending Review</div><div class="stat-value text-gold" id="sPending">—</div></div>
+  <div class="stat-card"><div class="stat-label">Approved</div><div class="stat-value text-primary" id="sApproved">—</div></div>
+  <div class="stat-card"><div class="stat-label">Rejected</div><div class="stat-value text-red" id="sRejected">—</div></div>
+  <div class="stat-card"><div class="stat-label">Pending Payout</div><div class="stat-value text-accent" id="sPayout">—</div></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title" style="margin:0;">All Verifications</div>
+    <select class="form-control" id="statusFilter" onchange="loadVerifications(1)" style="max-width:160px;">
+      <option value="">All Statuses</option>
+      <option value="pending">Pending</option>
+      <option value="approved">Approved</option>
+      <option value="rejected">Rejected</option>
+    </select>
+  </div>
+  <div id="verList"><div class="text-muted text-sm">Loading…</div></div>
+  <div id="pagination"></div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal-overlay" id="rejectModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Reject Verification</div>
+      <button class="modal-close" onclick="closeReject()">✕</button>
+    </div>
+    <div class="form-group mb-16">
+      <label class="form-label">Rejection Reason *</label>
+      <textarea class="form-control" id="rejectNote" rows="3" placeholder="Explain why this is being rejected…" style="resize:vertical;"></textarea>
+    </div>
+    <input type="hidden" id="rejectId" />
+    <div class="form-actions">
+      <button class="btn btn-danger" onclick="confirmReject()">Reject</button>
+      <button class="btn btn-ghost" onclick="closeReject()">Cancel</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+requireAdmin();
+
+async function loadVerifications(page=1) {
+  const status = document.getElementById('statusFilter').value;
+  const res    = await apiPost('winners/verification-list/', { page, limit:10, status });
+  const items  = res.data || [];
+
+  // Count stats from current data
+  const pending  = items.filter(v=>v.status==='pending').length;
+  const approved = items.filter(v=>v.status==='approved').length;
+  const rejected = items.filter(v=>v.status==='rejected').length;
+  const unpaid   = items.filter(v=>v.status==='approved'&&v.payment_status==='pending')
+                        .reduce((s,v)=>s+parseFloat(v.prize_amount),0);
+  document.getElementById('sPending').textContent  = res.total || '—';
+  document.getElementById('sApproved').textContent = approved;
+  document.getElementById('sRejected').textContent = rejected;
+  document.getElementById('sPayout').textContent   = fmtMoney(unpaid);
+
+  document.getElementById('verList').innerHTML = items.length
+    ? items.map(v => `
+      <div style="padding:16px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+          <div>
+            <div style="font-weight:700;font-size:14px;">User #${v.user_id} — Draw #${v.draw_id}</div>
+            <div class="text-muted text-xs mt-8">${v.match_type.replace('_',' ')} · Submitted ${fmtDate(v.created_at)}</div>
+            ${v.proof_notes ? `<div class="text-sm mt-8" style="color:var(--text-soft);">📝 ${v.proof_notes}</div>` : ''}
+            ${v.rejection_note ? `<div class="alert alert-error" style="margin-top:8px;font-size:12px;padding:8px 12px;">Rejected: ${v.rejection_note}</div>` : ''}
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:24px;font-weight:800;color:var(--gold);">${fmtMoney(v.prize_amount)}</div>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;justify-content:flex-end;">
+              ${statusBadge(v.status)}
+              <span class="badge ${v.payment_status==='paid'?'badge-green':'badge-gold'}">${v.payment_status}</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+          ${v.proof_file ? `<a href="/media/${v.proof_file}" target="_blank" class="btn btn-ghost btn-sm">📄 View Proof</a>` : ''}
+          ${v.status==='pending' ? `
+            <button class="btn btn-success btn-sm" onclick="approve(${v.verification_id})">✓ Approve</button>
+            <button class="btn btn-danger btn-sm"  onclick="openReject(${v.verification_id})">✕ Reject</button>` : ''}
+          ${v.status==='approved'&&v.payment_status==='pending' ? `
+            <button class="btn btn-primary btn-sm" onclick="markPaid(${v.verification_id})">💰 Mark Paid</button>` : ''}
+        </div>
+      </div>`).join('')
+    : '<div class="text-muted text-sm">No verifications found.</div>';
+
+  renderPagination(document.getElementById('pagination'), res.current_page, res.total_pages,
+    `function(p){loadVerifications(p)}`);
+}
+
+async function approve(id) {
+  const res = await apiPost('winners/approve-verification/', { id });
+  if (res.status) { showToast('Verification approved!', 'success'); loadVerifications(); }
+  else showToast(res.error, 'error');
+}
+
+function openReject(id) {
+  document.getElementById('rejectId').value   = id;
+  document.getElementById('rejectNote').value = '';
+  document.getElementById('rejectModal').classList.add('open');
+}
+function closeReject() { document.getElementById('rejectModal').classList.remove('open'); }
+
+async function confirmReject() {
+  const id   = document.getElementById('rejectId').value;
+  const note = document.getElementById('rejectNote').value.trim();
+  if (!note) { showToast('Rejection reason is required', 'error'); return; }
+  const res  = await apiPost('winners/reject-verification/', { id: parseInt(id), rejection_note: note });
+  if (res.status) { showToast('Rejected', 'info'); closeReject(); loadVerifications(); }
+  else showToast(res.error, 'error');
+}
+
+async function markPaid(id) {
+  if (!confirm('Mark this payout as paid?')) return;
+  const res = await apiPost('winners/mark-payout-paid/', { id });
+  if (res.status) { showToast('Marked as paid!', 'success'); loadVerifications(); }
+  else showToast(res.error, 'error');
+}
+
+document.addEventListener('DOMContentLoaded', () => loadVerifications(1));
+</script>{% endblock %}

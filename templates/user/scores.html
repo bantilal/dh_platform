@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}My Scores – Digital Heroes{% endblock %}
+{% block page_title %}Golf Scores{% endblock %}
+
+{% block sidebar_nav %}
+<div class="nav-section-label">My Account</div>
+<a class="nav-item" data-href="/dashboard/" href="/dashboard/"><span class="nav-icon">🏠</span> Dashboard</a>
+<a class="nav-item active" data-href="/scores/" href="/scores/"><span class="nav-icon">⛳</span> My Scores</a>
+<a class="nav-item" data-href="/draws/" href="/draws/"><span class="nav-icon">🎯</span> Draws</a>
+<a class="nav-item" data-href="/charity/" href="/charity/"><span class="nav-icon">💚</span> Charity</a>
+<a class="nav-item" data-href="/winnings/" href="/winnings/"><span class="nav-icon">🏆</span> Winnings</a>
+<a class="nav-item" data-href="/subscription/" href="/subscription/"><span class="nav-icon">💳</span> Subscription</a>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:20px;">
+  <div style="font-size:14px;color:var(--text-muted);">Stableford format · 1–45 range · Max 5 scores · One per date</div>
+</div>
+
+<div id="alertBox" style="margin-bottom:16px;"></div>
+
+<!-- Add Score -->
+<div class="card card-glow mb-20">
+  <div class="card-title">➕ Add New Score</div>
+  <div class="form-row">
+    <div class="form-group">
+      <label class="form-label">Score (1–45 Stableford)</label>
+      <input type="number" class="form-control" id="scoreVal" min="1" max="45" placeholder="e.g. 32" />
+      <span class="form-error" id="scoreErr"></span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date Played</label>
+      <input type="date" class="form-control" id="scoreDate" />
+      <span class="form-error" id="datErr"></span>
+    </div>
+    <div class="form-group" style="flex:2;">
+      <label class="form-label">Notes (optional)</label>
+      <input type="text" class="form-control" id="scoreNotes" placeholder="e.g. Back nine was tough" />
+    </div>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" id="addBtn" onclick="addScore()">⛳ Add Score</button>
+    <span class="text-muted text-sm" style="align-self:center;">Adding a 6th score removes the oldest automatically.</span>
+  </div>
+</div>
+
+<!-- Score List -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title" style="margin:0;">My Scores <span id="scoreCount" class="badge badge-violet" style="font-size:12px;">0/5</span></div>
+    <div style="display:flex;gap:6px;" id="scoreDots"></div>
+  </div>
+  <div id="scoresList"><div class="text-muted text-sm">Loading…</div></div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Edit Score</div>
+      <button class="modal-close" onclick="closeEdit()">✕</button>
+    </div>
+    <div class="form-group mb-16">
+      <label class="form-label">Score (1–45)</label>
+      <input type="number" class="form-control" id="editScore" min="1" max="45" />
+    </div>
+    <div class="form-group mb-16">
+      <label class="form-label">Notes</label>
+      <input type="text" class="form-control" id="editNotes" />
+    </div>
+    <input type="hidden" id="editId" />
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+      <button class="btn btn-ghost" onclick="closeEdit()">Cancel</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+requireAuth();
+let scores = [];
+
+async function loadScores() {
+  const res = await apiGet('scores/score-list/');
+  if (!res.status) { showToast('Failed to load scores', 'error'); return; }
+  scores = res.data;
+  renderScores();
+}
+
+function renderScores() {
+  const list = document.getElementById('scoresList');
+  const count = document.getElementById('scoreCount');
+  const dots  = document.getElementById('scoreDots');
+  count.textContent = `${scores.length}/5`;
+  dots.innerHTML = Array.from({length:5}, (_,i) =>
+    `<div style="width:8px;height:8px;border-radius:50%;background:${i < scores.length ? 'var(--primary)' : 'var(--border)'}"></div>`
+  ).join('');
+
+  if (!scores.length) {
+    list.innerHTML = '<div class="alert alert-info">No scores yet. Add your first round above!</div>';
+    return;
+  }
+
+  list.innerHTML = scores.map((s, i) => {
+    const hue = 100 + (s.score / 45) * 80;
+    return `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div class="score-ball" style="background:hsl(${hue},55%,35%);color:#fff;">${s.score}</div>
+        <div>
+          <div style="font-weight:600;font-size:14px;">${fmtDate(s.score_date)}</div>
+          ${s.notes ? `<div class="text-muted text-xs">${s.notes}</div>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        ${i === 0 ? '<span class="badge badge-green">Latest</span>' : ''}
+        <button class="btn btn-ghost btn-sm" onclick="openEdit(${s.score_id}, ${s.score}, '${s.notes || ''}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteScore(${s.score_id})">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addScore() {
+  const btn   = document.getElementById('addBtn');
+  const val   = document.getElementById('scoreVal').value;
+  const date  = document.getElementById('scoreDate').value;
+  const notes = document.getElementById('scoreNotes').value;
+
+  document.querySelectorAll('.form-error').forEach(el => el.textContent = '');
+  document.getElementById('alertBox').innerHTML = '';
+
+  if (!val)  { document.getElementById('scoreErr').textContent = 'Score is required'; return; }
+  if (!date) { document.getElementById('datErr').textContent  = 'Date is required'; return; }
+  if (val < 1 || val > 45) { document.getElementById('scoreErr').textContent = 'Must be 1–45'; return; }
+
+  setLoading(btn, true);
+  const res = await apiPost('scores/add-score/', { score: parseInt(val), score_date: date, notes });
+  setLoading(btn, false);
+
+  if (res.status) {
+    showToast('Score added successfully!', 'success');
+    document.getElementById('scoreVal').value   = '';
+    document.getElementById('scoreNotes').value = '';
+    loadScores();
+  } else {
+    document.getElementById('alertBox').innerHTML = `<div class="alert alert-error">⚠️ ${res.error || JSON.stringify(res.errors)}</div>`;
+  }
+}
+
+function openEdit(id, score, notes) {
+  document.getElementById('editId').value    = id;
+  document.getElementById('editScore').value = score;
+  document.getElementById('editNotes').value = notes;
+  document.getElementById('editModal').classList.add('open');
+}
+function closeEdit() { document.getElementById('editModal').classList.remove('open'); }
+
+async function saveEdit() {
+  const id    = document.getElementById('editId').value;
+  const score = document.getElementById('editScore').value;
+  const notes = document.getElementById('editNotes').value;
+  const res   = await apiPost('scores/edit-score/', { id: parseInt(id), score: parseInt(score), notes });
+  if (res.status) {
+    showToast('Score updated!', 'success');
+    closeEdit(); loadScores();
+  } else {
+    showToast(res.error || 'Update failed', 'error');
+  }
+}
+
+async function deleteScore(id) {
+  if (!confirm('Delete this score?')) return;
+  const res = await apiPost('scores/delete-score/', { id });
+  if (res.status) { showToast('Deleted', 'success'); loadScores(); }
+  else showToast(res.error, 'error');
+}
+
+// Set today's date as default
+document.getElementById('scoreDate').value = new Date().toISOString().split('T')[0];
+document.addEventListener('DOMContentLoaded', loadScores);
+</script>
+{% endblock %}
